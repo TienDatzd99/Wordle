@@ -1,0 +1,200 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Demo Test - Wordle Multiplayer</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; background: #f0f0f0; }
+        .container { max-width: 800px; margin: 0 auto; background: white; padding: 20px; border-radius: 10px; }
+        .test-section { margin: 20px 0; padding: 15px; border: 1px solid #ddd; border-radius: 5px; }
+        .success { background: #d4edda; border-color: #c3e6cb; color: #155724; }
+        .error { background: #f8d7da; border-color: #f5c6cb; color: #721c24; }
+        .warning { background: #fff3cd; border-color: #ffeaa7; color: #856404; }
+        button { padding: 10px 15px; margin: 5px; background: #007bff; color: white; border: none; border-radius: 3px; cursor: pointer; }
+        button:hover { background: #0056b3; }
+        pre { background: #f8f9fa; padding: 10px; border-radius: 3px; overflow-x: auto; }
+        .status { font-weight: bold; margin: 10px 0; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🧪 Demo Test - Game Ô Chữ Multiplayer</h1>
+        
+        <div class="test-section">
+            <h3>1. Kiểm tra kết nối Server</h3>
+            <button onclick="testServerConnection()">Test Server Health</button>
+            <div id="serverStatus" class="status"></div>
+        </div>
+        
+        <div class="test-section">
+            <h3>2. Kiểm tra WebSocket</h3>
+            <button onclick="testWebSocket()">Test WebSocket Connection</button>
+            <div id="websocketStatus" class="status"></div>
+        </div>
+        
+        <div class="test-section">
+            <h3>3. Test API Endpoints</h3>
+            <button onclick="testRestAPI()">Test REST API</button>
+            <div id="apiStatus" class="status"></div>
+            <pre id="apiResponse"></pre>
+        </div>
+        
+        <div class="test-section">
+            <h3>4. Demo Game Flow</h3>
+            <button onclick="demoGameFlow()">Demo Tạo và Join Game</button>
+            <div id="gameStatus" class="status"></div>
+            <div id="gameLog"></div>
+        </div>
+        
+        <div class="test-section">
+            <h3>5. Hướng dẫn Manual Test</h3>
+            <ol>
+                <li>Đảm bảo server đang chạy tại <strong>http://localhost:8080</strong></li>
+                <li>Mở <strong>2 tab browser</strong> với file <strong>index.html</strong></li>
+                <li>Tab 1: Nhập tên → "Tạo Game Mới"</li>
+                <li>Copy Game ID hiển thị</li>
+                <li>Tab 2: Nhập tên → "Tham Gia Game" → Nhập Game ID</li>
+                <li>Cả 2 tab sẽ hiển thị bảng game và bắt đầu chơi</li>
+                <li>Thử nhập các từ như: <strong>HELLO, WORLD, APPLE, MUSIC</strong></li>
+            </ol>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/sockjs-client@1/dist/sockjs.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/stompjs@2.3.3/lib/stomp.min.js"></script>
+    
+    <script>
+        const SERVER_URL = 'http://localhost:8080';
+        
+        function updateStatus(elementId, message, type = 'info') {
+            const element = document.getElementById(elementId);
+            element.textContent = message;
+            element.className = 'status ' + type;
+        }
+        
+        function log(elementId, message) {
+            const element = document.getElementById(elementId);
+            element.innerHTML += '<div>' + new Date().toLocaleTimeString() + ': ' + message + '</div>';
+        }
+        
+        async function testServerConnection() {
+            updateStatus('serverStatus', 'Đang kiểm tra server...', 'warning');
+            
+            try {
+                const response = await fetch(SERVER_URL + '/api/health');
+                if (response.ok) {
+                    const result = await response.text();
+                    updateStatus('serverStatus', '✅ Server đang hoạt động: ' + result, 'success');
+                } else {
+                    updateStatus('serverStatus', '❌ Server trả về lỗi: ' + response.status, 'error');
+                }
+            } catch (error) {
+                updateStatus('serverStatus', '❌ Không thể kết nối server: ' + error.message, 'error');
+            }
+        }
+        
+        function testWebSocket() {
+            updateStatus('websocketStatus', 'Đang kiểm tra WebSocket...', 'warning');
+            
+            try {
+                const socket = new SockJS(SERVER_URL + '/ws');
+                const stompClient = Stomp.over(socket);
+                
+                stompClient.connect({}, function(frame) {
+                    updateStatus('websocketStatus', '✅ WebSocket kết nối thành công', 'success');
+                    stompClient.disconnect();
+                }, function(error) {
+                    updateStatus('websocketStatus', '❌ WebSocket lỗi: ' + error, 'error');
+                });
+                
+                setTimeout(() => {
+                    if (document.getElementById('websocketStatus').textContent.includes('Đang kiểm tra')) {
+                        updateStatus('websocketStatus', '❌ WebSocket timeout - kiểm tra server', 'error');
+                    }
+                }, 5000);
+                
+            } catch (error) {
+                updateStatus('websocketStatus', '❌ WebSocket error: ' + error.message, 'error');
+            }
+        }
+        
+        async function testRestAPI() {
+            updateStatus('apiStatus', 'Đang test REST API...', 'warning');
+            document.getElementById('apiResponse').textContent = '';
+            
+            try {
+                // Test health endpoint
+                const healthResponse = await fetch(SERVER_URL + '/api/health');
+                const healthResult = await healthResponse.text();
+                
+                // Test waiting games endpoint
+                const gamesResponse = await fetch(SERVER_URL + '/api/games/waiting');
+                const gamesResult = await gamesResponse.json();
+                
+                const apiResult = {
+                    health: healthResult,
+                    waitingGames: gamesResult,
+                    timestamp: new Date().toISOString()
+                };
+                
+                document.getElementById('apiResponse').textContent = JSON.stringify(apiResult, null, 2);
+                updateStatus('apiStatus', '✅ REST API hoạt động bình thường', 'success');
+                
+            } catch (error) {
+                updateStatus('apiStatus', '❌ REST API lỗi: ' + error.message, 'error');
+            }
+        }
+        
+        function demoGameFlow() {
+            updateStatus('gameStatus', 'Đang demo game flow...', 'warning');
+            const gameLog = document.getElementById('gameLog');
+            gameLog.innerHTML = '';
+            
+            try {
+                const socket = new SockJS(SERVER_URL + '/ws');
+                const stompClient = Stomp.over(socket);
+                
+                stompClient.connect({}, function(frame) {
+                    log('gameLog', '🔗 Kết nối WebSocket thành công');
+                    
+                    // Subscribe to game creation
+                    stompClient.subscribe('/topic/game/created', function(message) {
+                        const game = JSON.parse(message.body);
+                        log('gameLog', '🎮 Game được tạo với ID: ' + game.gameId);
+                        log('gameLog', '📝 Chữ cái có sẵn: ' + game.availableLetters.join(', '));
+                        updateStatus('gameStatus', '✅ Demo thành công - Game đã được tạo!', 'success');
+                    });
+                    
+                    // Create a demo game
+                    setTimeout(() => {
+                        const demoPlayer = {
+                            playerId: 'demo_player_' + Date.now(),
+                            playerName: 'Demo Player'
+                        };
+                        
+                        log('gameLog', '👤 Tạo player demo: ' + demoPlayer.playerName);
+                        stompClient.send('/app/game/create', {}, JSON.stringify(demoPlayer));
+                    }, 1000);
+                    
+                    setTimeout(() => {
+                        stompClient.disconnect();
+                        log('gameLog', '🔚 Ngắt kết nối demo');
+                    }, 5000);
+                    
+                }, function(error) {
+                    updateStatus('gameStatus', '❌ Demo lỗi: ' + error, 'error');
+                });
+                
+            } catch (error) {
+                updateStatus('gameStatus', '❌ Demo error: ' + error.message, 'error');
+            }
+        }
+        
+        // Auto test khi load page
+        window.onload = function() {
+            setTimeout(testServerConnection, 500);
+        };
+    </script>
+</body>
+</html>

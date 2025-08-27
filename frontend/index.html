@@ -1,0 +1,2043 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Wordle Multiplayer Game</title>
+    <script src="https://cdn.jsdelivr.net/npm/sockjs-client@1/dist/sockjs.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/stompjs@2.3.3/lib/stomp.min.js"></script>
+    <script src="dictionary.js"></script>
+    <script src="js/network-client.js"></script>
+    <script src="js/room-manager.js"></script>
+    <link rel="stylesheet" href="css/network-styles.css">
+    <link rel="stylesheet" href="css/room.css">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            color: white;
+        }
+        
+        .header {
+            text-align: center;
+            padding: 20px 0;
+            background: rgba(0,0,0,0.2);
+        }
+        
+        .header h1 {
+            font-size: 2.5em;
+            color: #ffd700;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.5);
+        }
+        
+        .game-container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+            display: flex;
+            gap: 20px;
+            justify-content: center;
+            flex-wrap: wrap;
+        }
+        
+        .game-board {
+            background: rgba(255,255,255,0.95);
+            border-radius: 15px;
+            padding: 25px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.3);
+            color: #333;
+            min-width: 500px;
+            max-width: 500px;
+            width: 500px;
+            position: relative;
+            box-sizing: border-box;
+        }
+        
+        .game-info {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+            padding: 10px;
+            background: #f8f9fa;
+            border-radius: 10px;
+        }
+        
+        .round-info {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        
+        .round-badge {
+            background: #ffd700;
+            color: #333;
+            padding: 5px 10px;
+            border-radius: 15px;
+            font-weight: bold;
+            font-size: 14px;
+        }
+        
+        .timer {
+            background: #ff6b6b;
+            color: white;
+            padding: 8px 15px;
+            border-radius: 20px;
+            font-weight: bold;
+            font-size: 16px;
+        }
+        
+        .wordle-grid {
+            display: grid;
+            grid-template-columns: repeat(5, 1fr);
+            gap: 8px;
+            margin: 20px auto;
+            width: 300px;
+            max-width: 300px;
+        }
+        
+        .grid-cell {
+            width: 50px;
+            height: 50px;
+            border: 2px solid #d3d6da;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 20px;
+            font-weight: bold;
+            background: white;
+            border-radius: 3px;
+            transition: all 0.2s ease;
+        }
+        
+        .grid-cell.filled {
+            background: white;
+            border-color: #878a8c;
+            color: #121213;
+        }
+        
+        .grid-cell.correct {
+            background: #6aaa64;
+            border-color: #6aaa64;
+            color: white;
+        }
+        
+        .grid-cell.wrong-position {
+            background: #c9b458;
+            border-color: #c9b458;
+            color: white;
+        }
+        
+        .grid-cell.wrong {
+            background: #787c7e;
+            border-color: #787c7e;
+            color: white;
+        }
+        
+        .guess-prompt {
+            text-align: center;
+            margin: 20px 0;
+            font-size: 18px;
+            color: #666;
+            height: 30px;
+            min-height: 30px;
+            max-height: 30px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            overflow: hidden;
+        }
+        
+        .keyboard {
+            margin: 20px auto;
+            width: 100%;
+            max-width: 400px;
+            height: 150px;
+            min-height: 150px;
+            max-height: 150px;
+            overflow: hidden;
+        }
+        
+        .keyboard-row {
+            display: flex;
+            justify-content: center;
+            gap: 5px;
+            margin-bottom: 8px;
+        }
+        
+        .key {
+            background: #d3d6da;
+            border: none;
+            border-radius: 4px;
+            color: #333;
+            font-weight: bold;
+            font-size: 14px;
+            padding: 12px 8px;
+            min-width: 35px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+        
+        .key:hover {
+            background: #c3c6ca;
+        }
+        
+        .key.wide {
+            min-width: 60px;
+            font-size: 12px;
+        }
+        
+        .key.correct {
+            background: #6aaa64;
+            color: white;
+        }
+        
+        .key.wrong-position {
+            background: #c9b458;
+            color: white;
+        }
+        
+        .key.wrong {
+            background: #787c7e;
+            color: white;
+        }
+        
+        .word-input-section {
+            text-align: center;
+            margin: 20px 0;
+            height: 60px;
+            min-height: 60px;
+            max-height: 60px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        
+        .word-input {
+            padding: 12px 15px;
+            font-size: 16px;
+            border: 2px solid #d3d6da;
+            border-radius: 8px;
+            margin-right: 10px;
+            min-width: 200px;
+            text-transform: uppercase;
+        }
+        
+        .word-input:focus {
+            outline: none;
+            border-color: #6aaa64;
+        }
+        
+        .submit-btn {
+            padding: 12px 20px;
+            font-size: 16px;
+            background: #6aaa64;
+            color: white;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-weight: bold;
+            transition: background 0.2s ease;
+        }
+        
+        .submit-btn:hover {
+            background: #5a8a54;
+        }
+        
+        .submit-btn:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+        }
+        
+        .sidebar {
+            background: rgba(255,255,255,0.95);
+            border-radius: 15px;
+            padding: 20px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.3);
+            color: #333;
+            min-width: 300px;
+            max-height: 600px;
+        }
+        
+        .round-status {
+            background: #f8f9fa;
+            padding: 15px;
+            border-radius: 10px;
+            margin-bottom: 20px;
+        }
+        
+        .round-status h3 {
+            color: #ff6b6b;
+            margin-bottom: 10px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        
+        .player-info {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 10px;
+            background: #e9ecef;
+            border-radius: 8px;
+            margin-bottom: 10px;
+        }
+        
+        .player-name {
+            font-weight: bold;
+        }
+        
+        .player-score {
+            background: #6aaa64;
+            color: white;
+            padding: 5px 10px;
+            border-radius: 15px;
+            font-size: 14px;
+        }
+        
+        .chat-section {
+            background: #f8f9fa;
+            padding: 15px;
+            border-radius: 10px;
+        }
+        
+        .chat-title {
+            color: #ff6b6b;
+            margin-bottom: 15px;
+            font-weight: bold;
+        }
+        
+        .chat-input {
+            width: 100%;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 20px;
+            margin-bottom: 10px;
+        }
+        
+        .chat-send {
+            background: #ff6b6b;
+            color: white;
+            border: none;
+            padding: 8px 15px;
+            border-radius: 15px;
+            cursor: pointer;
+            font-weight: bold;
+        }
+        
+        .game-controls {
+            text-align: center;
+            margin-bottom: 20px;
+        }
+        
+        .btn {
+            padding: 12px 25px;
+            margin: 5px;
+            font-size: 16px;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-weight: bold;
+            transition: all 0.2s ease;
+        }
+        
+        .btn-primary {
+            background: #667eea;
+            color: white;
+        }
+        
+        .btn-primary:hover {
+            background: #5a6fd8;
+        }
+        
+        .btn-success {
+            background: #6aaa64;
+            color: white;
+        }
+        
+        .btn-success:hover {
+            background: #5a8a54;
+        }
+        
+        .status-message {
+            text-align: center;
+            padding: 15px;
+            margin: 15px 0;
+            border-radius: 10px;
+            font-weight: bold;
+            min-height: 60px;
+            max-height: 60px;
+            height: 60px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            overflow: hidden;
+            position: relative;
+            transition: none;
+            box-sizing: border-box;
+        }
+        
+        .status-info {
+            background: #e3f2fd;
+            color: #1976d2;
+            border: 1px solid #bbdefb;
+        }
+        
+        .status-success {
+            background: #e8f5e8;
+            color: #2e7d32;
+            border: 1px solid #c8e6c9;
+        }
+        
+        .status-error {
+            background: #ffebee;
+            color: #d32f2f;
+            border: 1px solid #ffcdd2;
+        }
+        
+        .found-words {
+            margin-top: 20px;
+            max-height: 200px;
+            overflow-y: auto;
+        }
+        
+        .word-list {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            margin-top: 10px;
+        }
+        
+        .word-tag {
+            background: #e3f2fd;
+            padding: 5px 12px;
+            border-radius: 15px;
+            font-size: 14px;
+            border: 1px solid #bbdefb;
+        }
+        
+        #gameArea {
+            display: none;
+        }
+        
+        .login-container {
+            background: rgba(255,255,255,0.95);
+            border-radius: 15px;
+            padding: 40px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.3);
+            color: #333;
+            max-width: 500px;
+            margin: 50px auto;
+            text-align: center;
+        }
+        
+        .login-container h2 {
+            margin-bottom: 30px;
+            color: #667eea;
+        }
+        
+        .settings-section {
+            background: #f8f9fa;
+            border-radius: 10px;
+            padding: 20px;
+            margin-bottom: 20px;
+            border: 2px solid #e9ecef;
+        }
+        
+        .settings-title {
+            color: #667eea;
+            font-size: 18px;
+            font-weight: bold;
+            margin-bottom: 15px;
+            text-align: left;
+        }
+        
+        .setting-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 15px;
+        }
+        
+        .setting-label {
+            font-weight: 500;
+            color: #333;
+            font-size: 14px;
+        }
+        
+        .setting-control {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        
+        .range-input {
+            width: 120px;
+            accent-color: #667eea;
+        }
+        
+        .range-value {
+            min-width: 60px;
+            text-align: center;
+            font-weight: bold;
+            color: #667eea;
+            background: white;
+            padding: 5px 10px;
+            border-radius: 5px;
+            border: 1px solid #ddd;
+            font-size: 12px;
+        }
+        
+        .preset-buttons {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+            margin-top: 10px;
+        }
+        
+        .preset-btn {
+            background: #e9ecef;
+            border: 1px solid #dee2e6;
+            padding: 5px 12px;
+            border-radius: 15px;
+            font-size: 12px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+        
+        .preset-btn:hover {
+            background: #667eea;
+            color: white;
+        }
+        
+        .preset-btn.active {
+            background: #667eea;
+            color: white;
+        }
+        
+        /* Settings Modal */
+        .settings-modal {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.5);
+            display: none;
+            justify-content: center;
+            align-items: center;
+            z-index: 1000;
+        }
+        
+        .settings-modal.active {
+            display: flex;
+        }
+        
+        .settings-modal-content {
+            background: white;
+            border-radius: 15px;
+            padding: 30px;
+            max-width: 500px;
+            width: 90%;
+            max-height: 80vh;
+            overflow-y: auto;
+            position: relative;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.3);
+        }
+        
+        .settings-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+            padding-bottom: 15px;
+            border-bottom: 2px solid #e9ecef;
+        }
+        
+        .settings-header h2 {
+            color: #667eea;
+            margin: 0;
+            font-size: 24px;
+        }
+        
+        .close-btn {
+            background: none;
+            border: none;
+            font-size: 24px;
+            cursor: pointer;
+            color: #666;
+            padding: 5px;
+            border-radius: 50%;
+            width: 35px;
+            height: 35px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        
+        .close-btn:hover {
+            background: #f0f0f0;
+            color: #333;
+        }
+        
+        .settings-icon {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            background: rgba(255,255,255,0.9);
+            border: none;
+            border-radius: 50%;
+            width: 45px;
+            height: 45px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 20px;
+            color: #667eea;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            transition: all 0.3s ease;
+        }
+        
+        .settings-icon:hover {
+            background: #667eea;
+            color: white;
+            transform: rotate(90deg);
+        }
+        
+        .input-group {
+            margin-bottom: 20px;
+        }
+        
+        .input-group input {
+            width: 100%;
+            padding: 15px;
+            font-size: 16px;
+            border: 2px solid #d3d6da;
+            border-radius: 8px;
+            text-align: center;
+        }
+        
+        .input-group input:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+        
+        @keyframes blink {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.3; }
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>🎯 WordleCup Multiplayer</h1>
+    </div>
+    
+    <!-- Network Status Indicator -->
+    <div class="network-status-indicator" id="networkStatusIndicator">
+        <div><span class="status-light connecting"></span>Network: Initializing...</div>
+    </div>
+    
+    <!-- Network Action Buttons -->
+    <div class="network-actions">
+        <button class="network-btn stats" onclick="showNetworkStats()">📊 Network Stats</button>
+        <button class="network-btn architecture" onclick="showNetworkArchitecture()">🏗️ Architecture</button>
+    </div>
+    
+    <!-- Network Info Panel -->
+    <div class="network-info-panel" id="networkInfoPanel" style="display: none;">
+        <h4>🌐 Network Protocols</h4>
+        <div class="protocol-info">
+            <div class="protocol-name">WebSocket (Port 8080)</div>
+            <div class="protocol-details">Real-time web communication</div>
+        </div>
+        <div class="protocol-info">
+            <div class="protocol-name">TCP Socket (Port 8081)</div>
+            <div class="protocol-details">Direct game communication</div>
+        </div>
+        <div class="protocol-info">
+            <div class="protocol-name">UDP Server (Port 8082)</div>
+            <div class="protocol-details">Fast statistics & leaderboard</div>
+        </div>
+    </div>
+    
+    <!-- Khu vực đăng nhập/tạo game -->
+    <div id="loginArea">
+        <div class="login-container">
+            <!-- Settings Icon -->
+            <button class="settings-icon" onclick="openSettingsModal()" title="Game Settings">
+                ⚙️
+            </button>
+            
+            <h2>Join the Battle!</h2>
+            <div class="input-group">
+                <input type="text" id="playerName" placeholder="Enter your name" maxlength="15">
+            </div>
+            
+            <!-- Current Settings Display -->
+            <div style="text-align: center; margin: 15px 0; padding: 10px; background: rgba(103, 126, 234, 0.1); border-radius: 8px; font-size: 14px; color: #667eea;">
+                <div>⚙️ Current Settings:</div>
+                <div id="currentSettingsDisplay">⏰ 5:00 per round • 🎯 6 rounds</div>
+            </div>
+            
+                <div class="game-controls">
+                    <button onclick="createGame()" class="btn btn-primary">Create New Game</button>
+                    <button onclick="showJoinGame()" class="btn btn-success">Join Game</button>
+                    <button onclick="shareGame()" class="btn" style="background: #ff6b6b; color: white;">🌍 Share Game</button>
+                </div>            <div id="joinGameArea" style="display: none;">
+                <div class="input-group">
+                    <input type="text" id="gameIdInput" placeholder="Enter Game ID">
+                </div>
+                <div class="game-controls">
+                    <button onclick="joinGame()" class="btn btn-success">Join Battle</button>
+                    <button onclick="hideJoinGame()" class="btn">Cancel</button>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Settings Modal -->
+    <div id="settingsModal" class="settings-modal">
+        <div class="settings-modal-content">
+            <div class="settings-header">
+                <h2>🎮 Game Settings</h2>
+                <button class="close-btn" onclick="closeSettingsModal()">×</button>
+            </div>
+            
+            <div class="settings-section">
+                <div class="setting-item">
+                    <span class="setting-label">⏰ Time per Round:</span>
+                    <div class="setting-control">
+                        <input type="range" id="timePerRound" class="range-input" 
+                               min="60" max="600" step="30" value="300">
+                        <span id="timeDisplay" class="range-value">5:00</span>
+                    </div>
+                </div>
+                
+                <div class="preset-buttons">
+                    <button class="preset-btn" onclick="setTimePreset(60)">1 min</button>
+                    <button class="preset-btn" onclick="setTimePreset(120)">2 min</button>
+                    <button class="preset-btn active" onclick="setTimePreset(300)">5 min</button>
+                    <button class="preset-btn" onclick="setTimePreset(480)">8 min</button>
+                    <button class="preset-btn" onclick="setTimePreset(600)">10 min</button>
+                </div>
+                
+                <div class="setting-item">
+                    <span class="setting-label">🎯 Number of Rounds:</span>
+                    <div class="setting-control">
+                        <input type="range" id="numberOfRounds" class="range-input" 
+                               min="3" max="15" step="1" value="6">
+                        <span id="roundsDisplay" class="range-value">6</span>
+                    </div>
+                </div>
+                
+                <div class="preset-buttons">
+                    <button class="preset-btn" onclick="setRoundsPreset(3)">Quick (3)</button>
+                    <button class="preset-btn active" onclick="setRoundsPreset(6)">Normal (6)</button>
+                    <button class="preset-btn" onclick="setRoundsPreset(10)">Long (10)</button>
+                    <button class="preset-btn" onclick="setRoundsPreset(15)">Marathon (15)</button>
+                </div>
+                
+                <div style="margin-top: 15px; padding-top: 15px; border-top: 2px solid #dee2e6;">
+                    <div class="settings-title">🚀 Quick Setup</div>
+                    <div class="preset-buttons">
+                        <button class="preset-btn" onclick="setGameMode('quick')">⚡ Quick Game</button>
+                        <button class="preset-btn" onclick="setGameMode('normal')">🎯 Normal Game</button>
+                        <button class="preset-btn" onclick="setGameMode('challenge')">🔥 Challenge</button>
+                        <button class="preset-btn" onclick="setGameMode('marathon')">🏃 Marathon</button>
+                    </div>
+                </div>
+                
+                <div style="margin-top: 20px; text-align: center;">
+                    <button onclick="saveSettings()" class="btn btn-primary">Save Settings</button>
+                    <button onclick="resetToDefaults()" class="btn" style="background: #6c757d; color: white; margin-left: 10px;">Reset to Defaults</button>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Khu vực chơi game -->
+    <div id="gameArea">
+        <div class="game-container">
+            <div class="game-board">
+                <div class="game-info">
+                    <div class="round-info">
+                        <span class="round-badge">⚡ Round 1/10</span>
+                        <div class="timer">
+                            ⏰ Time left: <span id="timeRemaining">05:00</span>
+                        </div>
+                    </div>
+                </div>
+                
+                <div id="gameStatus" class="status-message status-info">
+                    Waiting for opponent...
+                </div>
+                
+                <div class="wordle-grid" id="wordleGrid">
+                    <!-- 6 rows x 5 columns for Wordle grid -->
+                </div>
+                
+                <div class="guess-prompt">
+                    Make your first guess!
+                </div>
+                
+                <div class="keyboard">
+                    <div class="keyboard-row">
+                        <button class="key" data-key="Q" onclick="addLetter('Q')">Q</button>
+                        <button class="key" data-key="W" onclick="addLetter('W')">W</button>
+                        <button class="key" data-key="E" onclick="addLetter('E')">E</button>
+                        <button class="key" data-key="R" onclick="addLetter('R')">R</button>
+                        <button class="key" data-key="T" onclick="addLetter('T')">T</button>
+                        <button class="key" data-key="Y" onclick="addLetter('Y')">Y</button>
+                        <button class="key" data-key="U" onclick="addLetter('U')">U</button>
+                        <button class="key" data-key="I" onclick="addLetter('I')">I</button>
+                        <button class="key" data-key="O" onclick="addLetter('O')">O</button>
+                        <button class="key" data-key="P" onclick="addLetter('P')">P</button>
+                    </div>
+                    <div class="keyboard-row">
+                        <button class="key" data-key="A" onclick="addLetter('A')">A</button>
+                        <button class="key" data-key="S" onclick="addLetter('S')">S</button>
+                        <button class="key" data-key="D" onclick="addLetter('D')">D</button>
+                        <button class="key" data-key="F" onclick="addLetter('F')">F</button>
+                        <button class="key" data-key="G" onclick="addLetter('G')">G</button>
+                        <button class="key" data-key="H" onclick="addLetter('H')">H</button>
+                        <button class="key" data-key="J" onclick="addLetter('J')">J</button>
+                        <button class="key" data-key="K" onclick="addLetter('K')">K</button>
+                        <button class="key" data-key="L" onclick="addLetter('L')">L</button>
+                    </div>
+                    <div class="keyboard-row">
+                        <button class="key wide" onclick="submitCurrentWord()">Enter</button>
+                        <button class="key" data-key="Z" onclick="addLetter('Z')">Z</button>
+                        <button class="key" data-key="X" onclick="addLetter('X')">X</button>
+                        <button class="key" data-key="C" onclick="addLetter('C')">C</button>
+                        <button class="key" data-key="V" onclick="addLetter('V')">V</button>
+                        <button class="key" data-key="B" onclick="addLetter('B')">B</button>
+                        <button class="key" data-key="N" onclick="addLetter('N')">N</button>
+                        <button class="key" data-key="M" onclick="addLetter('M')">M</button>
+                        <button class="key wide" onclick="deleteLetter()">⌫</button>
+                    </div>
+                </div>
+                
+                <div class="word-input-section">
+                    <input type="text" id="wordInput" placeholder="Type your word here" class="word-input" maxlength="5">
+                    <button onclick="submitWord()" class="submit-btn" id="submitBtn">Submit Word</button>
+                </div>
+            </div>
+            
+            <div class="sidebar">
+                <div class="round-status">
+                    <h3>Round Status <span>—</span></h3>
+                    <div class="player-info">
+                        <span class="player-name" id="myPlayerName">You</span>
+                        <span class="player-score" id="myScore">0/6</span>
+                    </div>
+                    <div class="player-info">
+                        <span class="player-name" id="opponentName">Opponent</span>
+                        <span class="player-score" id="opponentScore">0/6</span>
+                    </div>
+                </div>
+                
+                <div class="chat-section">
+                    <div class="chat-title">Chat</div>
+                    <div id="chatMessages" style="height: 200px; overflow-y: auto; margin-bottom: 10px; padding: 10px; background: white; border-radius: 8px;">
+                        <!-- Chat messages will appear here -->
+                    </div>
+                    <input type="text" id="chatInput" class="chat-input" placeholder="Type a message...">
+                    <button onclick="sendChat()" class="chat-send">Send</button>
+                </div>
+                
+                <div class="found-words">
+                    <h3>Words Found:</h3>
+                    <div class="word-list" id="foundWordsList">
+                        <!-- Found words will appear here -->
+                    </div>
+                </div>
+                
+                <div class="ai-controls" style="margin-top: 20px; padding: 15px; background: #f8f9fa; border-radius: 10px;">
+                    <h3 style="margin-bottom: 10px; color: #ff6b6b;">🤖 AI Controls</h3>
+                    <button onclick="clearAICache()" class="btn" style="background: #ff6b6b; color: white; margin: 5px; padding: 8px 12px; font-size: 14px;">Clear AI Cache</button>
+                    <button onclick="showCacheStats()" class="btn" style="background: #6aaa64; color: white; margin: 5px; padding: 8px 12px; font-size: 14px;">Cache Stats</button>
+                    <div id="aiStats" style="margin-top: 10px; font-size: 12px; color: #666;"></div>
+                </div>
+                
+                <div class="game-info-panel" style="margin-top: 20px; padding: 15px; background: #e3f2fd; border-radius: 10px; border: 1px solid #bbdefb;">
+                    <h3 style="margin-bottom: 10px; color: #1976d2;">📊 Game Info</h3>
+                    <div style="font-size: 12px; color: #1565c0;">
+                        <div>⏰ Time per round: <span id="currentTimePerRound">5:00</span></div>
+                        <div>🎯 Total rounds: <span id="currentTotalRounds">6</span></div>
+                        <div>📈 Progress: <span id="gameProgress">Round 1/6</span></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let stompClient = null;
+        let gameId = null;
+        let playerId = null;
+        let playerName = null;
+        let foundWords = [];
+        let currentWord = '';
+        let currentRow = 0;
+        let targetWord = 'APPLE'; // This will be set by server
+        let usedLetters = {}; // Track letter states: 'correct', 'wrong-position', 'wrong'
+        let gameTimer = null;
+        let gameStartTime = null;
+        let gameDuration = 300000; // 5 minutes in milliseconds (will be updated from settings)
+        let dictionary = null; // Dictionary instance
+        let currentRound = 1;
+        let totalRounds = 6; // Will be updated from settings
+        let roundsWon = 0;
+        let isSubmitting = false; // Prevent multiple submissions
+        
+        // Game settings
+        let gameSettings = {
+            timePerRound: 300, // seconds
+            numberOfRounds: 6
+        };
+        
+        // Settings Modal functions
+        function openSettingsModal() {
+            document.getElementById('settingsModal').classList.add('active');
+        }
+        
+        function closeSettingsModal() {
+            document.getElementById('settingsModal').classList.remove('active');
+        }
+        
+        function saveSettings() {
+            // Settings are already saved in real-time
+            closeSettingsModal();
+            
+            // Show confirmation
+            const statusMsg = `Settings saved! ${formatTime(gameSettings.timePerRound)} per round, ${gameSettings.numberOfRounds} rounds`;
+            updateGameStatus(statusMsg, 'success');
+            setTimeout(() => {
+                updateGameStatus('Ready to create game!', 'info');
+            }, 2000);
+        }
+        
+        function resetToDefaults() {
+            // Reset to default values
+            setTimePreset(300); // 5 minutes
+            setRoundsPreset(6);  // 6 rounds
+            
+            // Update active buttons
+            document.querySelectorAll('.preset-btn').forEach(btn => btn.classList.remove('active'));
+            
+            // Set default active buttons
+            document.querySelectorAll('.preset-buttons')[0].children[2].classList.add('active'); // 5 min
+            document.querySelectorAll('.preset-buttons')[1].children[1].classList.add('active'); // Normal (6)
+            
+            updateCurrentSettingsDisplay();
+        }
+        
+        // Game settings functions
+        function updateTimeDisplay() {
+            const timeSlider = document.getElementById('timePerRound');
+            const timeDisplay = document.getElementById('timeDisplay');
+            const seconds = parseInt(timeSlider.value);
+            const minutes = Math.floor(seconds / 60);
+            const remainingSeconds = seconds % 60;
+            timeDisplay.textContent = `${minutes}:${remainingSeconds.toString().padStart(2, '0')}`;
+            gameSettings.timePerRound = seconds;
+            updateCurrentSettingsDisplay();
+        }
+        
+        function updateRoundsDisplay() {
+            const roundsSlider = document.getElementById('numberOfRounds');
+            const roundsDisplay = document.getElementById('roundsDisplay');
+            const rounds = parseInt(roundsSlider.value);
+            roundsDisplay.textContent = rounds.toString();
+            gameSettings.numberOfRounds = rounds;
+            updateCurrentSettingsDisplay();
+        }
+        
+        function updateCurrentSettingsDisplay() {
+            const display = document.getElementById('currentSettingsDisplay');
+            if (display) {
+                display.textContent = `⏰ ${formatTime(gameSettings.timePerRound)} per round • 🎯 ${gameSettings.numberOfRounds} rounds`;
+            }
+        }
+        
+        function setTimePreset(seconds) {
+            document.getElementById('timePerRound').value = seconds;
+            updateTimeDisplay();
+            
+            // Update active preset button
+            document.querySelectorAll('.preset-buttons:nth-of-type(1) .preset-btn').forEach(btn => {
+                btn.classList.remove('active');
+            });
+            event.target.classList.add('active');
+        }
+        
+        function setRoundsPreset(rounds) {
+            document.getElementById('numberOfRounds').value = rounds;
+            updateRoundsDisplay();
+            
+            // Update active preset button
+            document.querySelectorAll('.preset-buttons:nth-of-type(2) .preset-btn').forEach(btn => {
+                btn.classList.remove('active');
+            });
+            event.target.classList.add('active');
+        }
+        
+        function setGameMode(mode) {
+            // Clear all active quick setup buttons
+            document.querySelectorAll('.preset-buttons:last-child .preset-btn').forEach(btn => {
+                btn.classList.remove('active');
+            });
+            event.target.classList.add('active');
+            
+            switch(mode) {
+                case 'quick':
+                    setTimePreset(120); // 2 minutes
+                    setRoundsPreset(3); // 3 rounds
+                    break;
+                case 'normal':
+                    setTimePreset(300); // 5 minutes
+                    setRoundsPreset(6); // 6 rounds
+                    break;
+                case 'challenge':
+                    setTimePreset(180); // 3 minutes
+                    setRoundsPreset(10); // 10 rounds
+                    break;
+                case 'marathon':
+                    setTimePreset(480); // 8 minutes
+                    setRoundsPreset(15); // 15 rounds
+                    break;
+            }
+        }
+        
+        function generatePlayerId() {
+            return 'player_' + Math.random().toString(36).substr(2, 9);
+        }
+        
+        async function initializeDictionary() {
+            dictionary = new WordDictionary();
+            
+            // Try to load additional words from server
+            try {
+                const response = await fetch('http://localhost:8080/api/dictionary/words');
+                if (response.ok) {
+                    const serverWords = await response.json();
+                    console.log(`Loaded ${serverWords.length} words from server`);
+                    // Server words are already included in the class
+                } else {
+                    console.log('Using fallback dictionary');
+                }
+            } catch (error) {
+                console.log('Using offline dictionary');
+            }
+        }
+        
+        function isValidWord(word) {
+            return dictionary ? dictionary.isValidWord(word) : false;
+        }
+        
+        async function validateWordWithServer(word) {
+            try {
+                // Try AI validation first
+                const aiResponse = await fetch(`http://localhost:8080/api/dictionary/validate-ai/${word}`);
+                if (aiResponse.ok) {
+                    const result = await aiResponse.json();
+                    console.log('AI Validation result:', result);
+                    
+                    // Show additional info if available
+                    if (result.definition && result.definition !== "Definition not available") {
+                        showWordDefinition(word, result.definition, result.isCommon);
+                    }
+                    
+                    return result.isValid;
+                }
+                
+                // Fallback to simple validation
+                const response = await fetch(`http://localhost:8080/api/dictionary/validate/${word}`);
+                if (response.ok) {
+                    return await response.json();
+                }
+            } catch (error) {
+                console.log('Server validation failed, using local dictionary');
+            }
+            return isValidWord(word);
+        }
+        
+        function showWordDefinition(word, definition, isCommon) {
+            const statusDiv = document.getElementById('gameStatus');
+            const commonText = isCommon ? " (Common word)" : " (Rare word)";
+            statusDiv.innerHTML = `
+                <div style="text-align: left;">
+                    <strong>✅ "${word}"${commonText}</strong><br>
+                    <small style="font-size: 12px; opacity: 0.8;">${definition}</small>
+                </div>
+            `;
+            statusDiv.className = 'status-message status-success';
+            
+            // Clear after 5 seconds
+            setTimeout(() => {
+                updateGameStatus(`Round ${currentRound}/${totalRounds} - Continue guessing!`, 'info');
+            }, 5000);
+        }
+        
+        function showWordNotFoundMessage(word) {
+            updateGameStatus(`❌ "${word}" is not a valid English word! Try another word.`, 'error');
+            
+            // Try to get suggestions for similar words
+            getSuggestions(word);
+            
+            // Clear the message after 4 seconds
+            setTimeout(() => {
+                updateGameStatus('Keep guessing! Target: APPLE', 'info');
+            }, 4000);
+        }
+        
+        async function getSuggestions(word) {
+            try {
+                const partial = word.substring(0, 3); // Get first 3 letters for suggestions
+                const response = await fetch(`http://localhost:8080/api/dictionary/suggestions/${partial}`);
+                if (response.ok) {
+                    const suggestions = await response.json();
+                    if (suggestions.length > 0) {
+                        showSuggestions(suggestions.slice(0, 5)); // Show top 5 suggestions
+                    }
+                }
+            } catch (error) {
+                console.log('Failed to get suggestions');
+            }
+        }
+        
+        function showSuggestions(suggestions) {
+            const statusDiv = document.getElementById('gameStatus');
+            statusDiv.innerHTML = `
+                <div style="text-align: left;">
+                    <strong>❌ Invalid word!</strong><br>
+                    <small style="font-size: 12px;">💡 Try: ${suggestions.join(', ')}</small>
+                </div>
+            `;
+            statusDiv.className = 'status-message status-error';
+        }
+        
+        function initializeWordleGrid() {
+            const grid = document.getElementById('wordleGrid');
+            grid.innerHTML = '';
+            
+            // Create 6 rows x 5 columns
+            for (let row = 0; row < 6; row++) {
+                for (let col = 0; col < 5; col++) {
+                    const cell = document.createElement('div');
+                    cell.className = 'grid-cell';
+                    cell.id = `cell-${row}-${col}`;
+                    grid.appendChild(cell);
+                }
+            }
+        }
+        
+        function resetRound() {
+            // Reset game state for new round
+            currentRow = 0;
+            currentWord = '';
+            usedLetters = {};
+            isSubmitting = false; // Reset submission flag
+            
+            // Clear the grid
+            initializeWordleGrid();
+            
+            // Reset keyboard colors
+            document.querySelectorAll('.key[data-key]').forEach(key => {
+                key.className = 'key' + (key.classList.contains('wide') ? ' wide' : '');
+            });
+            
+            // Clear input
+            document.getElementById('wordInput').value = '';
+            
+            // Get new target word
+            if (dictionary) {
+                targetWord = dictionary.getRandomWord();
+                console.log('New target word:', targetWord);
+            }
+            
+            // Reset timer for new round
+            resetGameTimer();
+            
+            // Update round display
+            updateRoundDisplay();
+            
+            // Update status
+            updateGameStatus(`Round ${currentRound}/${totalRounds} - New word! Make your first guess!`, 'info');
+        }
+        
+        function updateRoundDisplay() {
+            // Update round counter in badge
+            const roundBadge = document.querySelector('.round-badge');
+            if (roundBadge) {
+                roundBadge.textContent = `⚡ Round ${currentRound}/${totalRounds}`;
+            }
+            
+            // Update round counter in player score area
+            const roundDisplay = document.getElementById('myScore');
+            if (roundDisplay) {
+                roundDisplay.textContent = `${currentRow}/6`;
+            }
+            
+            // Update wins counter
+            const winsDisplay = document.getElementById('opponentScore');
+            if (winsDisplay) {
+                winsDisplay.textContent = `Wins: ${roundsWon}`;
+            }
+            
+            // Update game info panel
+            const timeDisplay = document.getElementById('currentTimePerRound');
+            const totalRoundsDisplay = document.getElementById('currentTotalRounds');
+            const progressDisplay = document.getElementById('gameProgress');
+            
+            if (timeDisplay) {
+                timeDisplay.textContent = formatTime(gameSettings.timePerRound);
+            }
+            if (totalRoundsDisplay) {
+                totalRoundsDisplay.textContent = totalRounds.toString();
+            }
+            if (progressDisplay) {
+                progressDisplay.textContent = `Round ${currentRound}/${totalRounds}`;
+            }
+        }
+        
+        function addLetter(letter) {
+            console.log('addLetter called:', letter, 'currentRow:', currentRow, 'currentWord:', currentWord);
+            if (currentWord.length < 5) {
+                currentWord += letter;
+                updateCurrentRow();
+                document.getElementById('wordInput').value = currentWord;
+            }
+        }
+        
+        function deleteLetter() {
+            if (currentWord.length > 0) {
+                currentWord = currentWord.slice(0, -1);
+                updateCurrentRow();
+                document.getElementById('wordInput').value = currentWord;
+            }
+        }
+        
+        function showGameState() {
+            console.log('=== GAME STATE ===');
+            console.log('currentRow:', currentRow);
+            console.log('currentWord:', currentWord);
+            console.log('currentRound:', currentRound);
+            console.log('targetWord:', targetWord);
+            console.log('=================');
+        }
+        
+        function updateCurrentRow() {
+            console.log('updateCurrentRow called, currentRow:', currentRow, 'currentWord:', currentWord);
+            
+            // Ensure currentRow is within valid range
+            if (currentRow < 0 || currentRow >= 6) {
+                console.error('Invalid currentRow:', currentRow);
+                return;
+            }
+            
+            // Clear current row
+            for (let col = 0; col < 5; col++) {
+                const cell = document.getElementById(`cell-${currentRow}-${col}`);
+                if (cell) {
+                    cell.textContent = '';
+                    cell.className = 'grid-cell';
+                }
+            }
+            
+            // Fill current word
+            for (let i = 0; i < currentWord.length; i++) {
+                const cell = document.getElementById(`cell-${currentRow}-${i}`);
+                if (cell) {
+                    cell.textContent = currentWord[i];
+                    cell.className = 'grid-cell filled';
+                }
+            }
+        }
+        
+        async function submitCurrentWord() {
+            if (currentWord.length === 5) {
+                // Check if word is valid using AI validation
+                const isValid = await validateWordWithServer(currentWord);
+                if (!isValid) {
+                    showWordNotFoundMessage(currentWord);
+                    return;
+                }
+                submitWord();
+            } else {
+                alert('Please complete the 5-letter word!');
+            }
+        }
+        
+        function animateWordResult(word, result) {
+            // Animate the current row based on word result
+            for (let i = 0; i < 5; i++) {
+                const cell = document.getElementById(`cell-${currentRow}-${i}`);
+                setTimeout(() => {
+                    if (result[i] === 'correct') {
+                        cell.className = 'grid-cell correct';
+                    } else if (result[i] === 'wrong-position') {
+                        cell.className = 'grid-cell wrong-position';
+                    } else {
+                        cell.className = 'grid-cell wrong';
+                    }
+                }, i * 100);
+            }
+            
+            // Update keyboard colors and move to next row after animation completes
+            setTimeout(() => {
+                updateKeyboardColors();
+                currentRow++;
+                updateRoundStatus(); // Update round status after each guess
+                currentWord = '';
+                document.getElementById('wordInput').value = '';
+            }, 600); // Wait for all animations to complete
+        }
+        
+        function startGameTimer() {
+            gameStartTime = Date.now();
+            gameTimer = setInterval(() => {
+                const elapsed = Date.now() - gameStartTime;
+                const remaining = Math.max(0, gameDuration - elapsed);
+                
+                const minutes = Math.floor(remaining / 60000);
+                const seconds = Math.floor((remaining % 60000) / 1000);
+                
+                document.getElementById('timeRemaining').textContent = 
+                    String(minutes).padStart(2, '0') + ':' + String(seconds).padStart(2, '0');
+                
+                if (remaining === 0) {
+                    clearInterval(gameTimer);
+                    handleTimeUp();
+                }
+            }, 1000);
+        }
+        
+        function resetGameTimer() {
+            // Stop current timer
+            if (gameTimer) {
+                clearInterval(gameTimer);
+                gameTimer = null;
+            }
+            
+            // Reset timer duration for new round using settings
+            gameStartTime = Date.now();
+            gameDuration = gameSettings.timePerRound * 1000; // Convert to milliseconds
+            
+            // Start new timer
+            startGameTimer();
+        }
+        
+        function handleTimeUp() {
+            updateGameStatus(`⏰ Time's up! The word was: "${targetWord}"`, 'error');
+            document.getElementById('submitBtn').disabled = true;
+            
+            // Add visual feedback for time up
+            document.querySelector('.timer').style.animation = 'blink 0.5s ease-in-out 3';
+            
+            // Show the answer for 4 seconds then move to next round
+            setTimeout(() => {
+                if (currentRound < totalRounds) {
+                    currentRound++;
+                    foundWords = []; // Reset tried words for new round
+                    document.getElementById('submitBtn').disabled = false;
+                    resetRound();
+                } else {
+                    // Game completed
+                    updateGameStatus(`🎮 Game completed! Final score: ${roundsWon}/${totalRounds} rounds won!`, 'info');
+                    document.getElementById('submitBtn').disabled = true;
+                    stopGameTimer();
+                }
+            }, 4000);
+        }
+        
+        function stopGameTimer() {
+            if (gameTimer) {
+                clearInterval(gameTimer);
+                gameTimer = null;
+            }
+        }
+        
+        function updateKeyboardColors() {
+            Object.keys(usedLetters).forEach(letter => {
+                const keyElement = document.querySelector(`[data-key="${letter}"]`);
+                if (keyElement) {
+                    keyElement.className = `key ${usedLetters[letter]}`;
+                }
+            });
+        }
+        
+        function sendChat() {
+            const chatInput = document.getElementById('chatInput');
+            const message = chatInput.value.trim();
+            if (message) {
+                if (stompClient && gameId) {
+                    // Send via WebSocket for multiplayer
+                    stompClient.send('/app/game/chat', {}, JSON.stringify({
+                        gameId: gameId,
+                        playerId: playerId,
+                        playerName: playerName,
+                        message: message
+                    }));
+                } else {
+                    // Add locally for single player demo
+                    addChatMessage(playerName || 'You', message);
+                }
+                chatInput.value = '';
+            }
+        }
+        
+        function addChatMessage(playerName, message) {
+            const chatMessages = document.getElementById('chatMessages');
+            const messageDiv = document.createElement('div');
+            messageDiv.innerHTML = `<strong>${playerName}:</strong> ${message}`;
+            messageDiv.style.marginBottom = '5px';
+            chatMessages.appendChild(messageDiv);
+            chatMessages.scrollTop = chatMessages.scrollHeight;
+        }
+        
+        function updateRoundStatus() {
+            const attempts = currentRow;
+            const maxAttempts = 6;
+            // Show current attempts in this round
+            document.getElementById('myScore').textContent = `${attempts}/${maxAttempts}`;
+            
+            // Show total rounds won
+            document.getElementById('opponentScore').textContent = `Wins: ${roundsWon}`;
+        }
+        
+        function connect() {
+            const socket = new SockJS('http://localhost:8080/ws');
+            stompClient = Stomp.over(socket);
+            
+            stompClient.connect({}, function(frame) {
+                console.log('Connected: ' + frame);
+                
+                // Subscribe to game creation
+                stompClient.subscribe('/topic/game/created', function(message) {
+                    const game = JSON.parse(message.body);
+                    gameId = game.gameId;
+                    showGame();
+                    updateGameStatus('Game created! ID: ' + gameId + '. Waiting for opponent...', 'info');
+                    displayLetters(game.availableLetters);
+                    initializeWordleGrid();
+                });
+                
+                // Subscribe to game state updates
+                if (gameId) {
+                    subscribeToGame(gameId);
+                }
+                
+            }, function(error) {
+                console.log('Connection error: ' + error);
+                updateGameStatus('Connection error!', 'error');
+            });
+        }
+        
+        function subscribeToGame(gameId) {
+            // Subscribe to game state
+            stompClient.subscribe('/topic/game/' + gameId, function(message) {
+                const gameState = JSON.parse(message.body);
+                updateGameState(gameState);
+            });
+            
+            // Subscribe to game joined
+            stompClient.subscribe('/topic/game/' + gameId + '/joined', function(message) {
+                const game = JSON.parse(message.body);
+                if (game.status === 'IN_PROGRESS') {
+                    updateGameStatus('Game started! Find as many words as possible!', 'success');
+                    startGameTimer(); // Start timer when game begins
+                    updateRoundStatus(); // Initialize round status
+                }
+            });
+            
+            // Subscribe to chat messages
+            stompClient.subscribe('/topic/game/' + gameId + '/chat', function(message) {
+                const chatData = JSON.parse(message.body);
+                addChatMessage(chatData.playerName, chatData.message);
+            });
+            
+            // Subscribe to personal error messages
+            stompClient.subscribe('/user/' + playerId + '/queue/error', function(message) {
+                const errorMsg = message.body;
+                if (errorMsg.includes('Invalid word')) {
+                    showWordNotFoundMessage(currentWord || 'unknown');
+                } else {
+                    updateGameStatus(errorMsg, 'error');
+                }
+            });
+        }
+        
+        function createGame() {
+            console.log('createGame function called');
+            
+            const nameInput = document.getElementById('playerName');
+            if (!nameInput.value.trim()) {
+                alert('Please enter your name!');
+                return;
+            }
+            
+            const hostName = nameInput.value.trim();
+            console.log('Host name:', hostName);
+            
+            // Check if roomManager exists
+            if (typeof roomManager === 'undefined') {
+                console.error('roomManager is not defined!');
+                alert('Room system not loaded properly. Please refresh the page.');
+                return;
+            }
+            
+            console.log('Calling roomManager.createRoom with:', hostName);
+            
+            // Create room using Room Manager
+            roomManager.createRoom(hostName);
+        }
+        
+        function formatTime(seconds) {
+            const minutes = Math.floor(seconds / 60);
+            const remainingSeconds = seconds % 60;
+            if (minutes === 0) return `${remainingSeconds}s`;
+            if (remainingSeconds === 0) return `${minutes}min`;
+            return `${minutes}:${remainingSeconds.toString().padStart(2, '0')}`;
+        }
+        
+        function sendCreateGame() {
+            stompClient.send('/app/game/create', {}, JSON.stringify({
+                playerId: playerId,
+                playerName: playerName
+            }));
+        }
+        
+        function showJoinGame() {
+            document.getElementById('joinGameArea').style.display = 'block';
+        }
+        
+        function hideJoinGame() {
+            document.getElementById('joinGameArea').style.display = 'none';
+        }
+        
+        function joinGame() {
+            const nameInput = document.getElementById('playerName');
+            const gameIdInput = document.getElementById('gameIdInput');
+            
+            if (!nameInput.value.trim()) {
+                alert('Please enter your name!');
+                return;
+            }
+            
+            if (!gameIdInput.value.trim()) {
+                alert('Please enter Game ID!');
+                return;
+            }
+            
+            playerName = nameInput.value.trim();
+            playerId = generatePlayerId();
+            gameId = gameIdInput.value.trim();
+            
+            document.getElementById('myPlayerName').textContent = playerName;
+            
+            if (!stompClient || !stompClient.connected) {
+                connect();
+                setTimeout(() => {
+                    sendJoinGame();
+                }, 1000);
+            } else {
+                sendJoinGame();
+            }
+        }
+        
+        function sendJoinGame() {
+            subscribeToGame(gameId);
+            
+            stompClient.send('/app/game/join', {}, JSON.stringify({
+                gameId: gameId,
+                playerId: playerId,
+                playerName: playerName
+            }));
+            
+            showGame();
+            updateGameStatus('Joining game...', 'info');
+            initializeWordleGrid();
+            
+            // Get game info
+            fetch(`http://localhost:8080/api/game/${gameId}`)
+                .then(response => response.json())
+                .then(game => {
+                    if (game && game.availableLetters) {
+                        displayLetters(game.availableLetters);
+                    }
+                })
+                .catch(error => {
+                    console.error('Error fetching game:', error);
+                });
+        }
+        
+        function showGame() {
+            document.getElementById('loginArea').style.display = 'none';
+            document.getElementById('gameArea').style.display = 'block';
+            
+            updateRoundStatus(); // Initialize round status
+        }
+        
+        async function submitWord() {
+            if (isSubmitting) {
+                console.log('Already submitting, please wait...');
+                return;
+            }
+            
+            isSubmitting = true;
+            console.log('submitWord called, currentRow:', currentRow);
+            
+            const wordInput = document.getElementById('wordInput');
+            let word = wordInput.value.trim().toUpperCase();
+            
+            if (!word) {
+                word = currentWord;
+            }
+            
+            if (!word || word.length !== 5) {
+                alert('Please enter a 5-letter word!');
+                isSubmitting = false;
+                return;
+            }
+            
+            if (currentRow >= 6) {
+                alert('Game over! No more attempts.');
+                isSubmitting = false;
+                return;
+            }
+            
+            if (foundWords.includes(word)) {
+                alert('You already tried this word!');
+                isSubmitting = false;
+                return;
+            }
+            
+            // Check if word is valid using AI validation
+            const isValid = await validateWordWithServer(word);
+            if (!isValid) {
+                showWordNotFoundMessage(word);
+                isSubmitting = false;
+                return;
+            }
+            
+            // Add to tried words for this round
+            foundWords.push(word);
+            
+            // For demo purposes, check against target word
+            const result = checkWord(word, targetWord);
+            animateWordResult(word, result);
+            
+            // Reset submitting flag after animation
+            setTimeout(() => {
+                isSubmitting = false;
+            }, 700);
+            
+            if (word === targetWord) {
+                // Player won this round
+                roundsWon++;
+                updateGameStatus(`🎉 Correct! "${targetWord}" - You won this round!`, 'success');
+                
+                // Start next round after 3 seconds
+                setTimeout(() => {
+                    if (currentRound < totalRounds) {
+                        currentRound++;
+                        foundWords = []; // Reset tried words for new round
+                        resetRound();
+                    } else {
+                        // Game completed
+                        updateGameStatus(`🏆 Game completed! You won ${roundsWon}/${totalRounds} rounds!`, 'success');
+                        document.getElementById('submitBtn').disabled = true;
+                        stopGameTimer();
+                    }
+                }, 3000);
+                
+            } else if (currentRow >= 5) {
+                // Player lost this round
+                updateGameStatus(`😔 Round ${currentRound} failed! The word was: "${targetWord}"`, 'error');
+                
+                // Start next round after 4 seconds
+                setTimeout(() => {
+                    if (currentRound < totalRounds) {
+                        currentRound++;
+                        foundWords = []; // Reset tried words for new round
+                        resetRound();
+                    } else {
+                        // Game completed
+                        updateGameStatus(`🎮 Game completed! Final score: ${roundsWon}/${totalRounds} rounds won!`, 'info');
+                        document.getElementById('submitBtn').disabled = true;
+                        stopGameTimer();
+                    }
+                }, 4000);
+            }
+            
+            // If connected to server, also send to server
+            if (stompClient && gameId) {
+                stompClient.send('/app/game/submit', {}, JSON.stringify({
+                    gameId: gameId,
+                    playerId: playerId,
+                    word: word,
+                    row: 0,
+                    col: 0,
+                    direction: 'horizontal'
+                }));
+            }
+            
+            wordInput.value = '';
+        }
+        
+        function checkWord(guess, target) {
+            const result = [];
+            const targetArray = target.split('');
+            const guessArray = guess.split('');
+            const targetLetterCount = {};
+            
+            // Count letters in target word
+            targetArray.forEach(letter => {
+                targetLetterCount[letter] = (targetLetterCount[letter] || 0) + 1;
+            });
+            
+            // First pass: mark correct positions
+            for (let i = 0; i < 5; i++) {
+                if (guessArray[i] === targetArray[i]) {
+                    result[i] = 'correct';
+                    targetLetterCount[guessArray[i]]--;
+                    usedLetters[guessArray[i]] = 'correct';
+                } else {
+                    result[i] = null; // Will be determined in second pass
+                }
+            }
+            
+            // Second pass: mark wrong positions and wrong letters
+            for (let i = 0; i < 5; i++) {
+                if (result[i] === null) {
+                    if (targetLetterCount[guessArray[i]] > 0) {
+                        result[i] = 'wrong-position';
+                        targetLetterCount[guessArray[i]]--;
+                        // Only update if not already marked as correct
+                        if (usedLetters[guessArray[i]] !== 'correct') {
+                            usedLetters[guessArray[i]] = 'wrong-position';
+                        }
+                    } else {
+                        result[i] = 'wrong';
+                        // Only update if not already marked as correct or wrong-position
+                        if (!usedLetters[guessArray[i]]) {
+                            usedLetters[guessArray[i]] = 'wrong';
+                        }
+                    }
+                }
+            }
+            
+            return result;
+        }
+        
+        function updateGameState(gameState) {
+            console.log('Game state updated:', gameState);
+            
+            // Update scores
+            const playerScores = gameState.playerScores || {};
+            const wordsFound = gameState.playerWordsFound || {};
+            
+            let myScore = 0;
+            let opponentScore = 0;
+            let myWordsCount = 0;
+            let opponentWordsCount = 0;
+            let opponentName = 'Opponent';
+            
+            Object.keys(playerScores).forEach(name => {
+                if (name === playerName) {
+                    myScore = playerScores[name];
+                    myWordsCount = wordsFound[name] || 0;
+                } else {
+                    opponentScore = playerScores[name];
+                    opponentWordsCount = wordsFound[name] || 0;
+                    opponentName = name;
+                }
+            });
+            
+            document.getElementById('myScore').textContent = `${myWordsCount}/6`;
+            document.getElementById('opponentScore').textContent = `${opponentWordsCount}/6`;
+            document.getElementById('opponentName').textContent = opponentName;
+            
+            // Update timer
+            if (gameState.timeRemaining !== undefined) {
+                const minutes = Math.floor(gameState.timeRemaining / 60000);
+                const seconds = Math.floor((gameState.timeRemaining % 60000) / 1000);
+                document.getElementById('timeRemaining').textContent = 
+                    String(minutes).padStart(2, '0') + ':' + String(seconds).padStart(2, '0');
+            }
+            
+            // Check game status
+            if (gameState.status === 'FINISHED') {
+                updateGameStatus('Game finished!', 'info');
+                document.getElementById('submitBtn').disabled = true;
+            }
+        }
+        
+        function displayLetters(letters) {
+            // This function can be used to show available letters if needed
+            console.log('Available letters:', letters);
+        }
+        
+        function updateFoundWords() {
+            const foundWordsDiv = document.getElementById('foundWordsList');
+            foundWordsDiv.innerHTML = '';
+            
+            foundWords.forEach(word => {
+                const wordTag = document.createElement('div');
+                wordTag.className = 'word-tag';
+                wordTag.textContent = word;
+                foundWordsDiv.appendChild(wordTag);
+            });
+        }
+        
+        function updateGameStatus(message, type = 'info') {
+            const statusDiv = document.getElementById('gameStatus');
+            statusDiv.textContent = message;
+            statusDiv.className = 'status-message status-' + type;
+        }
+        
+        // AI Control Functions
+        async function clearAICache() {
+            try {
+                const response = await fetch('http://localhost:8080/api/dictionary/cache/clear', {
+                    method: 'POST'
+                });
+                if (response.ok) {
+                    const result = await response.text();
+                    updateGameStatus('🤖 AI Cache cleared successfully!', 'success');
+                    document.getElementById('aiStats').textContent = 'Cache cleared';
+                } else {
+                    updateGameStatus('❌ Failed to clear AI cache', 'error');
+                }
+            } catch (error) {
+                updateGameStatus('❌ Error clearing AI cache', 'error');
+            }
+        }
+        
+        async function showCacheStats() {
+            try {
+                const response = await fetch('http://localhost:8080/api/dictionary/cache/stats');
+                if (response.ok) {
+                    const stats = await response.json();
+                    document.getElementById('aiStats').innerHTML = `
+                        Cache Size: ${stats.cacheSize} words<br>
+                        <small>Recent: ${stats.cachedWords.slice(-5).join(', ')}</small>
+                    `;
+                    updateGameStatus(`🤖 AI Cache: ${stats.cacheSize} words cached`, 'info');
+                } else {
+                    updateGameStatus('❌ Failed to get AI cache stats', 'error');
+                }
+            } catch (error) {
+                updateGameStatus('❌ Error getting AI cache stats', 'error');
+            }
+        }
+        
+        // Network Functions
+        async function showNetworkStats() {
+            const panel = document.getElementById('networkInfoPanel');
+            panel.style.display = panel.style.display === 'none' ? 'block' : 'none';
+            
+            if (networkClient) {
+                try {
+                    const stats = await networkClient.getNetworkStats();
+                    console.log('Network Stats:', stats);
+                    updateNetworkStatusIndicator(stats);
+                } catch (error) {
+                    console.error('Failed to get network stats:', error);
+                }
+            }
+        }
+        
+        async function showNetworkArchitecture() {
+            if (networkClient) {
+                await networkClient.showNetworkArchitecture();
+            }
+        }
+        
+        function updateNetworkStatusIndicator(stats) {
+            const indicator = document.getElementById('networkStatusIndicator');
+            
+            let status = 'Offline';
+            let statusClass = 'offline';
+            
+            if (stats && stats.isRunning) {
+                status = 'Online - All Protocols Active';
+                statusClass = 'online';
+            }
+            
+            indicator.innerHTML = `<div><span class="status-light ${statusClass}"></span>Network: ${status}</div>`;
+        }
+        
+        // Initialize network status
+        function initializeNetworkStatus() {
+            setTimeout(async () => {
+                if (networkClient) {
+                    try {
+                        const stats = await networkClient.getNetworkStats();
+                        updateNetworkStatusIndicator(stats);
+                    } catch (error) {
+                        updateNetworkStatusIndicator(null);
+                    }
+                }
+            }, 2000);
+        }
+        
+        // Share Game Function
+        function shareGame() {
+            const gameUrl = window.location.href;
+            const shareText = `🎯 Join my Wordle Multiplayer battle!\n\n🌐 Game URL: ${gameUrl}\n\n📱 Features:\n• Real-time multiplayer\n• AI word validation\n• Live chat\n• Network programming showcase\n\n🎮 Click to play!`;
+            
+            // Try to use Web Share API if available
+            if (navigator.share) {
+                navigator.share({
+                    title: 'Wordle Multiplayer Game',
+                    text: shareText,
+                    url: gameUrl
+                }).catch(err => console.log('Error sharing:', err));
+            } else {
+                // Fallback: Copy to clipboard
+                navigator.clipboard.writeText(shareText).then(() => {
+                    alert('Game link copied to clipboard! Share with friends!');
+                }).catch(() => {
+                    // Manual copy fallback
+                    showShareModal(gameUrl, shareText);
+                });
+            }
+        }
+        
+        function showShareModal(gameUrl, shareText) {
+            const modal = document.createElement('div');
+            modal.className = 'settings-modal active';
+            modal.innerHTML = `
+                <div class="settings-modal-content">
+                    <div class="settings-header">
+                        <h2>🌍 Share Your Game</h2>
+                        <button class="close-btn" onclick="this.closest('.settings-modal').remove()">×</button>
+                    </div>
+                    <div style="padding: 20px;">
+                        <h3>🔗 Game URL:</h3>
+                        <div style="background: #f5f5f5; padding: 10px; border-radius: 5px; margin: 10px 0; word-break: break-all;">
+                            ${gameUrl}
+                        </div>
+                        <button onclick="copyToClipboard('${gameUrl}')" class="btn btn-primary" style="margin: 10px 5px;">Copy URL</button>
+                        
+                        <h3>📱 Share Message:</h3>
+                        <textarea readonly style="width: 100%; height: 120px; padding: 10px; border-radius: 5px; border: 1px solid #ddd; margin: 10px 0;">${shareText}</textarea>
+                        <button onclick="copyToClipboard(\`${shareText}\`)" class="btn btn-success" style="margin: 10px 5px;">Copy Message</button>
+                        
+                        <div style="margin-top: 20px; padding: 15px; background: #e3f2fd; border-radius: 5px;">
+                            <strong>📋 How to share:</strong><br>
+                            • Copy the URL and send to friends<br>
+                            • Share on social media<br>
+                            • Use messaging apps<br>
+                            • Email the game link<br><br>
+                            <strong>🌐 For internet access:</strong><br>
+                            Run MULTIPLAYER_SETUP.bat for public access
+                        </div>
+                    </div>
+                </div>
+            `;
+            document.body.appendChild(modal);
+        }
+        
+        function copyToClipboard(text) {
+            navigator.clipboard.writeText(text).then(() => {
+                alert('Copied to clipboard!');
+            }).catch(() => {
+                // Fallback for older browsers
+                const textArea = document.createElement('textarea');
+                textArea.value = text;
+                document.body.appendChild(textArea);
+                textArea.select();
+                document.execCommand('copy');
+                document.body.removeChild(textArea);
+                alert('Copied to clipboard!');
+            });
+        }
+        
+        // Event handlers
+        document.addEventListener('DOMContentLoaded', async function() {
+            // Initialize dictionary first
+            await initializeDictionary();
+            console.log('Dictionary initialized');
+            
+            document.getElementById('wordInput').addEventListener('keypress', function(e) {
+                if (e.key === 'Enter') {
+                    submitWord();
+                } else if (e.key.match(/[a-zA-Z]/)) {
+                    const letter = e.key.toUpperCase();
+                    if (currentWord.length < 5) {
+                        currentWord = this.value.toUpperCase() + letter;
+                        updateCurrentRow();
+                    }
+                }
+            });
+            
+            document.getElementById('wordInput').addEventListener('input', function(e) {
+                this.value = this.value.toUpperCase();
+                currentWord = this.value;
+                updateCurrentRow();
+            });
+            
+            document.getElementById('playerName').addEventListener('keypress', function(e) {
+                if (e.key === 'Enter') {
+                    createGame();
+                }
+            });
+            
+            document.getElementById('gameIdInput').addEventListener('keypress', function(e) {
+                if (e.key === 'Enter') {
+                    joinGame();
+                }
+            });
+            
+            document.getElementById('chatInput').addEventListener('keypress', function(e) {
+                if (e.key === 'Enter') {
+                    sendChat();
+                }
+            });
+            
+            // Settings event listeners
+            document.getElementById('timePerRound').addEventListener('input', updateTimeDisplay);
+            document.getElementById('numberOfRounds').addEventListener('input', updateRoundsDisplay);
+            
+            // Initialize displays
+            updateTimeDisplay();
+            updateRoundsDisplay();
+            updateCurrentSettingsDisplay();
+            
+            // Initialize network status
+            initializeNetworkStatus();
+            
+            // Debug hotkey
+            document.addEventListener('keydown', function(e) {
+                if (e.key === 'F12' && e.ctrlKey) {
+                    showGameState();
+                }
+                // Close modal with Escape key
+                if (e.key === 'Escape') {
+                    closeSettingsModal();
+                }
+            });
+            
+            // Close modal when clicking outside
+            document.getElementById('settingsModal').addEventListener('click', function(e) {
+                if (e.target === this) {
+                    closeSettingsModal();
+                }
+            });
+        });
+    </script>
+</body>
+</html>
