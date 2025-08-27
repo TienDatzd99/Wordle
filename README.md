@@ -1,11 +1,243 @@
-# Game Ô Chữ Nhiều Người Chơi (Multiplayer Wordle)
+# 🎯 WordleCup Multiplayer Game
 
-## Mô tả
-Game ô chữ nhiều người chơi với tính năng:
-- Server cung cấp từ điển các từ vựng
-- Người chơi điền từ vào bảng ô chữ từ các chữ cái có sẵn
-- Hiển thị số ô điền đúng của mình và đối thủ theo thời gian thực
-- Thời gian chơi giới hạn (5 phút mỗi game)
+A sophisticated multiplayer Wordle game built with Spring Boot and real-time WebSocket communication, featuring room management, AI-powered word validation, and multi-protocol networking architecture.
+
+## 🌟 Features
+
+### Core Game Features
+- **Multiplayer Wordle Game**: Classic 5-letter word guessing with multiplayer support
+- **Room Management System**: Create and join game rooms with custom room codes
+- **Real-time Synchronization**: Live game updates via WebSocket/STOMP messaging
+- **AI Word Validation**: Intelligent word validation with definitions and suggestions
+- **Multiple Game Modes**: Single player and multiplayer modes
+- **Responsive UI**: Modern web interface with smooth animations
+
+### Technical Features
+- **Multi-Protocol Architecture**: WebSocket (8080), TCP (8081), UDP (8082)
+- **Spring Boot 3.1.0**: Modern Java framework with WebSocket support
+- **Java 21**: Latest LTS Java version with enhanced performance
+- **Enhanced Dictionary**: Comprehensive word database with AI validation
+- **Network Monitoring**: Real-time network statistics and monitoring
+- **Public Access**: Ngrok integration for external multiplayer access
+
+## 🚀 Quick Start
+
+### Prerequisites
+- Java 21 or higher
+- Maven 3.6+ (included via wrapper)
+- Modern web browser
+- Internet connection (for AI features)
+
+### Running the Game
+
+1. **Clone the repository**:
+   ```bash
+   git clone https://github.com/TienDatzd99/Wordle.git
+   cd Wordle
+   ```
+
+2. **Start the server**:
+   ```bash
+   # Windows
+   START_SERVER.bat
+   
+   # Linux/Mac
+   chmod +x backend/run-server.sh
+   ./backend/run-server.sh
+   ```
+
+3. **Access the game**:
+   - Local: http://localhost:8080
+   - Public (via ngrok): Run `START_PUBLIC_MULTIPLAYER.bat`
+
+## 🏗️ Architecture
+
+### Backend Structure
+```
+backend/
+├── src/main/java/com/wordle/game/
+│   ├── controller/          # REST and WebSocket controllers
+│   ├── service/            # Business logic and AI services
+│   ├── model/              # Data models
+│   ├── network/            # Multi-protocol networking
+│   └── config/             # Configuration classes
+└── src/main/resources/
+    ├── static/             # Web assets
+    └── application.properties
+```
+
+### Frontend Structure
+```
+frontend/
+├── css/                    # Stylesheets
+├── js/                     # JavaScript modules
+│   ├── room-manager.js     # Room management logic
+│   └── network-client.js   # Network communication
+└── index.html              # Main game interface
+```
+
+### Network Architecture
+- **Port 8080**: WebSocket server for web client communication
+- **Port 8081**: TCP server for real-time game communication  
+- **Port 8082**: UDP server for fast statistics and leaderboard
+
+## 🎮 How to Play
+
+### Single Player Mode
+1. Enter your name
+2. Click "Create New Game"
+3. Start guessing 5-letter words
+4. Try to find the target word in 6 attempts
+
+### Multiplayer Mode
+1. **Create Room**: Click "Create New Game" to host
+2. **Join Room**: Click "Join Game" and enter room code
+3. **Start Game**: Host clicks "Start Game" when ready
+4. **Compete**: Race to find the word faster than opponents
+
+### Game Controls
+- **Keyboard**: Type letters directly
+- **On-screen Keyboard**: Click letters on virtual keyboard
+- **Enter**: Submit your guess
+- **Backspace**: Delete last letter
+
+## 🔧 Development
+
+### Project Setup
+```bash
+# Backend development
+cd backend
+./mvnw spring-boot:run
+
+# Frontend development (serve static files)
+# Files are served from backend/src/main/resources/static/
+```
+
+### Configuration
+- **Server Port**: `application.properties` → `server.port=8080`
+- **AI Features**: Enable/disable in `AIWordValidationService`
+- **Network Ports**: Configure in `NetworkManager`
+
+### Building
+```bash
+# Build JAR file
+cd backend
+./mvnw clean package
+
+# Run JAR
+java -jar target/wordle-game-0.0.1-SNAPSHOT.jar
+```
+
+## 🌐 Network Programming Concepts
+
+This project demonstrates various network programming concepts:
+
+### Protocols Implemented
+- **WebSocket**: Bidirectional real-time communication
+- **TCP Sockets**: Reliable connection-oriented communication
+- **UDP Sockets**: Fast connectionless communication
+- **HTTP REST**: Traditional request-response API
+
+### Concepts Covered
+- Multi-threading and concurrent programming
+- Protocol design and message serialization
+- Client-server architecture patterns
+- Network performance monitoring
+- Real-time data synchronization
+
+## 🤖 AI Integration
+
+### Word Validation
+- **Intelligent Validation**: AI-powered word checking
+- **Definitions**: Get word meanings and usage
+- **Suggestions**: Helpful word suggestions for invalid inputs
+- **Caching**: Efficient caching for improved performance
+
+### API Endpoints
+- `GET /api/dictionary/validate-ai/{word}` - AI word validation
+- `GET /api/dictionary/suggestions/{prefix}` - Word suggestions
+- `POST /api/dictionary/cache/clear` - Clear AI cache
+
+## 📊 Monitoring
+
+### Network Statistics
+- Real-time connection monitoring
+- Protocol-specific metrics
+- Performance analytics
+- Connection health checks
+
+### Game Analytics
+- Player statistics
+- Game completion rates
+- Word difficulty metrics
+- Performance monitoring
+
+## 🔧 Troubleshooting
+
+### Common Issues
+
+1. **Port Already in Use**:
+   ```bash
+   # Kill existing Java processes
+   taskkill /F /IM java.exe  # Windows
+   pkill java                # Linux/Mac
+   ```
+
+2. **Network Connection Issues**:
+   - Check firewall settings
+   - Verify port availability
+   - Test with `telnet localhost 8080`
+
+3. **WebSocket Connection Failed**:
+   - Ensure server is running
+   - Check browser console for errors
+   - Verify CORS configuration
+
+## 🚀 Deployment
+
+### Local Deployment
+- Use `START_SERVER.bat` for local testing
+- Access via `http://localhost:8080`
+
+### Public Deployment
+- Use `START_PUBLIC_MULTIPLAYER.bat` for public access
+- Ngrok provides public URL for external players
+- Share the generated URL with friends
+
+### Cloud Deployment
+- Docker support included (`Dockerfile`)
+- Deploy to Heroku, AWS, or Google Cloud
+- Configure environment variables for production
+
+## 🤝 Contributing
+
+1. Fork the repository
+2. Create a feature branch: `git checkout -b feature/amazing-feature`
+3. Commit changes: `git commit -m 'Add amazing feature'`
+4. Push to branch: `git push origin feature/amazing-feature`
+5. Open a Pull Request
+
+## 📝 License
+
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+
+## 🙏 Acknowledgments
+
+- Wordle game concept inspired by Josh Wardle's original game
+- Spring Boot framework for robust backend development
+- WebSocket technology for real-time communication
+- AI services for enhanced word validation
+
+## 📞 Support
+
+For support and questions:
+- Create an issue on GitHub
+- Email: tiendatzd99@gmail.com
+- Check the [Wiki](https://github.com/TienDatzd99/Wordle/wiki) for detailed documentation
+
+---
+
+**Built with ❤️ using Spring Boot, WebSocket, and modern web technologies**
 
 ## Công nghệ sử dụng
 - **Backend:** Java Spring Boot + WebSocket
